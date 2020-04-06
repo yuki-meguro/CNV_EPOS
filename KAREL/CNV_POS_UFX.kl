@@ -1,0 +1,89 @@
+--* coding: Shift-jis *--
+--
+--  --------------------------------------
+--  Released under the Apache 2.0 License.
+--  Yuki Meguro
+--  --------------------------------------
+--
+--  --------------------------------------
+--  Author: Yuki Meguro
+--
+--  Description:
+--      ワールド座標で記録した座標値を
+--      異なるユーザ座標系の座標値に変換します
+--      ※ ただし形態については変換前の位置データを継承します
+--
+--      ﾋｷｽｳ[1] =  変換ﾕｰｻﾞ座標番号
+--  
+--      ﾋｷｽｳ[2] =  入力先位置ﾚｼﾞｽﾀ番号
+--
+--      ﾋｷｽｳ[3] =  出力先位置ﾚｼﾞｽﾀ番号
+--
+--  Dependancies: none
+--  --------------------------------------
+
+PROGRAM CNV_EPOS_UFX
+%SYSTEM
+%NOLOCKGROUP
+%NOPAUSESHFT
+%NOPAUSE=ERROR+COMMAND+TPENABLE
+%COMMENT = 'v1.0'
+CONST
+    CC_NONE   = 0   --    エラー処理用
+	SEV_ABORT = 2   --    エラー処理用
+    GROUP_NO = 1
+VAR
+    status: INTEGER
+
+    ROUTINE GetPrmInt(prm_no: INTEGER): INTEGER
+    CONST
+        Err_CODE = 17042
+    VAR
+        data_type: INTEGER
+        prm_val: INTEGER
+        dummy_real: REAL
+        dummy_str: STRING[1]
+    BEGIN
+        GET_TPE_PRM(prm_no, data_type, prm_val, dummy_real, dummy_str, status)
+        IF (status=0) AND (data_type=1) AND (prm_val>0) THEN
+            RETURN(prm_val)
+        ELSE
+            POST_ERR(Err_CODE, '', CC_NONE, SEV_ABORT)        
+        ENDIF
+    END GetPrmInt
+
+    ROUTINE InvCalc(frame_no: INTEGER; preg_in: INTEGER; preg_out:INTEGER)
+    VAR
+        preg_eposn: XYZWPREXT
+        eposn_conf: CONFIG
+        frame_pos,
+        calc_pos: POSITION
+    BEGIN
+        preg_eposn = GET_POS_REG(preg_in, status , GROUP_NO)
+        IF status<>0 THEN
+            POST_ERR(status, '', CC_NONE, SEV_ABORT)
+        ENDIF
+
+        eposn_conf = preg_eposn.CONFIG_DATA
+            --backup
+        frame_pos = $MNUFRAME[1, frame_no]
+        calc_pos = INV(frame_pos):preg_eposn
+            -- POSITION = POSITION:XYZWPREXT
+        preg_eposn = calc_pos
+        preg_eposn.CONFIG_DATA = eposn_conf
+
+        SET_EPOS_REG(preg_out, preg_eposn, status, GROUP_NO) 
+        IF status<>0 THEN
+            POST_ERR(status, '', CC_NONE, SEV_ABORT)
+        ENDIF
+    END InvCalc
+
+    ROUTINE Main
+    BEGIN
+        InvCalc(GetPrmInt(1), GetPrmInt(2), GetPrmInt(3))
+    END Main
+
+
+BEGIN
+    Main
+END CNV_EPOS_UFX
